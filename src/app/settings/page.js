@@ -29,7 +29,7 @@ export default function SettingsPage() {
       setLoading(true);
       const data = await api.get('/staff/me');
       setProfile(data);
-      setAvailabilities(data.availabilities || []);
+      setAvailabilities(data?.availabilities || []);
     } catch (err) {
       console.error('Failed to fetch profile:', err);
     } finally {
@@ -89,7 +89,7 @@ export default function SettingsPage() {
           <Card title="Skills & Certifications">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-sm)', marginTop: 'var(--space-md)' }}>
               {profile?.skills?.length > 0 ? profile.skills.map(skill => (
-                <Badge key={skill.id} variant="primary">{skill.name}</Badge>
+                <Badge key={skill.id || skill.skill?.id} variant="primary">{skill.name || skill.skill?.name}</Badge>
               )) : <p className="text-muted">No skills listed.</p>}
             </div>
           </Card>

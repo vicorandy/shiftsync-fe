@@ -28,6 +28,11 @@ export default function SchedulePage() {
     headcount: 1,
     locationId: ''
   });
+  const [allStaff, setAllStaff] = useState([]);
+  const [swapData, setSwapData] = useState({
+    type: 'SWAP',
+    accepterProfileId: ''
+  });
 
   const fetchData = async () => {
     try {
@@ -49,8 +54,12 @@ export default function SchedulePage() {
       }
 
       if (user?.role === 'STAFF') {
-        const profile = await api.get('/staff/me');
+        const [profile, staffList] = await Promise.all([
+          api.get('/staff/me'),
+          api.get('/staff')
+        ]);
         setMyProfile(profile);
+        setAllStaff(staffList.filter(s => s.id !== profile.id));
       }
 
       const now = new Date();
@@ -77,20 +86,22 @@ export default function SchedulePage() {
     const isMyShift = myProfile && shift.assignments?.some(a => a.staffProfileId === myProfile.id);
     if (isMyShift) {
       setSelectedShift(shift);
+      setSwapData({ type: 'SWAP', accepterProfileId: '' });
       setIsSwapModalOpen(true);
     } else {
       console.log('View shift details', shift);
     }
   };
 
-  const handleRequestSwap = async (type) => {
+  const handleRequestSwap = async () => {
     try {
       await api.post('/swaps/request', {
         shiftId: selectedShift.id,
-        type: type // 'SWAP' or 'DROP'
+        type: swapData.type,
+        accepterProfileId: swapData.type === 'SWAP' ? swapData.accepterProfileId : undefined
       });
       setIsSwapModalOpen(false);
-      alert(`${type} request submitted!`);
+      alert(`${swapData.type} request submitted!`);
     } catch (err) {
       console.error('Swap request failed:', err);
       alert('Failed to submit request: ' + (err.message || 'Unknown error'));
@@ -199,9 +210,40 @@ export default function SchedulePage() {
             </div>
             
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-md)' }}>
-              <Button onClick={() => handleRequestSwap('SWAP')}>Request Swap</Button>
-              <Button variant="secondary" onClick={() => handleRequestSwap('DROP')}>Drop Shift</Button>
+              <Button 
+                variant={swapData.type === 'SWAP' ? 'primary' : 'secondary'} 
+                onClick={() => setSwapData({ ...swapData, type: 'SWAP' })}
+              >
+                Request Swap
+              </Button>
+              <Button 
+                variant={swapData.type === 'DROP' ? 'primary' : 'secondary'} 
+                onClick={() => setSwapData({ ...swapData, type: 'DROP' })}
+              >
+                Drop Shift
+              </Button>
             </div>
+
+            {swapData.type === 'SWAP' && (
+              <Select
+                label="Select Colleague to Swap With"
+                value={swapData.accepterProfileId}
+                onChange={(e) => setSwapData({ ...swapData, accepterProfileId: e.target.value })}
+                options={[
+                  { label: 'Select a colleague...', value: '' },
+                  ...allStaff.map(s => ({ label: s.user.name, value: s.id }))
+                ]}
+              />
+            )}
+
+            <Button 
+              style={{ width: '100%' }} 
+              onClick={handleRequestSwap}
+              disabled={swapData.type === 'SWAP' && !swapData.accepterProfileId}
+            >
+              Confirm {swapData.type === 'SWAP' ? 'Swap' : 'Drop'} Request
+            </Button>
+
             <p style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>
               Note: Swap requests allow you to trade with a colleague. Drop requests need manager approval and coverage.
             </p>

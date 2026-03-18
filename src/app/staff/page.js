@@ -6,6 +6,7 @@ import StaffCard from '@/components/StaffCard';
 import Input from '@/components/Input';
 import Button from '@/components/Button';
 import Modal from '@/components/Modal';
+import { api } from '@/lib/api';
 
 export default function StaffPage() {
   const [searchTerm, setSearchTerm] = useState('');
@@ -18,7 +19,16 @@ export default function StaffPage() {
       setLoading(true);
       // Assuming GET /staff returns the full list of staff
       const data = await api.get('/staff');
-      setStaffList(data);
+      // Map backend data to simple format for StaffCard
+      const mappedData = data.map(s => ({
+        id: s.id,
+        name: s.user?.name || 'Unknown',
+        email: s.user?.email || '',
+        skills: s.skills?.map(sk => sk.skill?.name) || [],
+        isAvailable: true, // Placeholder for now
+        weeklyHours: 0
+      }));
+      setStaffList(mappedData);
     } catch (err) {
       console.error('Failed to fetch staff:', err);
     } finally {
@@ -31,8 +41,8 @@ export default function StaffPage() {
   }, []);
 
   const filteredStaff = staffList.filter(s =>
-    s.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    s.skills.some(sk => sk.name.toLowerCase().includes(searchTerm.toLowerCase()))
+    (s.name || '').toLowerCase().includes(searchTerm.toLowerCase()) ||
+    (s.skills || []).some(sk => sk.toLowerCase().includes(searchTerm.toLowerCase()))
   );
 
   return (

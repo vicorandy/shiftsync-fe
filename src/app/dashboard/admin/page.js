@@ -5,11 +5,15 @@ import AppShell from '@/components/AppShell';
 import Card from '@/components/Card';
 import Badge from '@/components/Badge';
 import Button from '@/components/Button';
+import Modal from '@/components/Modal';
+import Input from '@/components/Input';
 import { useAuth } from '@/hooks/useAuth';
 import { api } from '@/lib/api';
+import { useRouter } from 'next/navigation';
 
 export default function AdminDashboard() {
   const { user } = useAuth();
+  const router = useRouter();
   const [stats, setStats] = useState({
     onDuty: 0,
     openShifts: 0,
@@ -17,6 +21,10 @@ export default function AdminDashboard() {
   });
   const [recentNotifications, setRecentNotifications] = useState([]);
   const [upcomingShifts, setUpcomingShifts] = useState([]);
+  const [pendingSwaps, setPendingSwaps] = useState([]);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [selectedSwap, setSelectedSwap] = useState(null);
+  const [managerComment, setManagerComment] = useState('');
   const [loading, setLoading] = useState(true);
 
   // 1. Fetch Notifications
@@ -24,7 +32,6 @@ export default function AdminDashboard() {
     const fetchNotifications = async () => {
       try {
         const notifications = await api.get('/admin/notifications');
-        console.log('[Admin Debug] Notifications Data:', notifications);
         setRecentNotifications(notifications.slice(0, 5));
       } catch (err) {
         console.error('Failed to fetch admin notifications:', err);
@@ -43,8 +50,6 @@ export default function AdminDashboard() {
         nextWeek.setDate(now.getDate() + 14);
 
         const allShifts = await api.get('/shifts', { start: startOfDay.toISOString(), end: nextWeek.toISOString() });
-        console.log('[Admin Debug] All Shifts Data:', allShifts);
-
         const openShiftsCount = allShifts.filter(s => s.assignments?.length < s.headcount).length;
         
         setStats(prev => ({
@@ -66,7 +71,6 @@ export default function AdminDashboard() {
     const fetchOnDuty = async () => {
       try {
         const onDutyList = await api.get('/analytics/on-duty');
-        console.log('[Admin Debug] On-Duty Data:', onDutyList);
         
         setStats(prev => ({
           ...prev,
@@ -84,20 +88,31 @@ export default function AdminDashboard() {
     const fetchSwaps = async () => {
       try {
         const swapData = await api.get('/swaps');
-        console.log('[Admin Debug] Swaps Data:', swapData);
-
-        const pendingCount = swapData.filter(s => s.status === 'PENDING_APPROVAL' || s.status === 'PENDING_ACCEPTANCE').length;
-        
-        setStats(prev => ({
-          ...prev,
-          pendingSwaps: pendingCount
-        }));
+        setPendingSwaps(swapData.filter(s => s.status === 'PENDING_APPROVAL'));
       } catch (err) {
         console.error('Failed to fetch admin swaps:', err);
       }
     };
     if (user) fetchSwaps();
   }, [user]);
+
+  const handleApproveReject = async (action) => {
+    try {
+      await api.post(`/swaps/${selectedSwap.id}/approve`, {
+        action,
+        comment: managerComment
+      });
+      alert(`Request ${action === 'APPROVE' ? 'approved' : 'rejected'} successfully.`);
+      setIsModalOpen(false);
+      setManagerComment('');
+      // Refresh swaps
+      const swapData = await api.get('/swaps');
+      setPendingSwaps(swapData.filter(s => s.status === 'PENDING_APPROVAL'));
+    } catch (err) {
+      console.error('Failed to approve/reject:', err);
+      alert('Action failed: ' + (err.message || 'Unknown error'));
+    }
+  };
 
   return (
     <AppShell>
@@ -119,12 +134,14 @@ export default function AdminDashboard() {
 
         <Card title="Unfilled Shifts" subtitle="Across all regions">
           <div style={{ fontSize: '2.5rem', fontWeight: '800', margin: 'var(--space-md) 0', color: 'var(--error)' }}>{stats.openShifts}</div>
-          <Button variant="secondary" style={{ width: '100%' }}>Manage All Shifts</Button>
+          <Button variant="secondary" style={{ width: '100%' }} onClick={() => router.push('/schedule')}>Manage All Shifts</Button>
         </Card>
 
         <Card title="Total Pending Swaps" subtitle="Awaiting manager or system approval">
-          <div style={{ fontSize: '2.5rem', fontWeight: '800', margin: 'var(--space-md) 0', color: 'var(--warning)' }}>{stats.pendingSwaps}</div>
-          <Button variant="secondary" style={{ width: '100%' }}>Review Queue</Button>
+          <div style={{ fontSize: '2.5rem', fontWeight: '800', margin: 'var(--space-md) 0', color: pendingSwaps.length > 0 ? 'var(--warning)' : 'inherit' }}>
+            {pendingSwaps.length}
+          </div>
+          <Button variant="secondary" style={{ width: '100%' }} onClick={() => setIsModalOpen(true)}>Review Queue</Button>
         </Card>
       </div>
 
@@ -186,6 +203,60 @@ export default function AdminDashboard() {
           </div>
         </Card>
       </div>
+      <Modal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        title="Admin: Review Shift Requests"
+        footer={<Button variant="secondary" onClick={() => setIsModalOpen(false)}>Close</Button>}
+      >
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-md)' }}>
+          {pendingSwaps.length > 0 ? pendingSwaps.map(swap => (
+            <div key={swap.id} style={{
+              padding: 'var(--space-md)',
+              border: '1px solid var(--surface-border)',
+              borderRadius: 'var(--radius-md)',
+              background: 'var(--bg-color)'
+            }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 'var(--space-sm)' }}>
+                <div>
+                  <Badge variant={swap.type === 'SWAP' ? 'primary' : 'warning'}>{swap.type}</Badge>
+                  <div style={{ fontWeight: '700', marginTop: '4px' }}>{swap.shift?.skill?.name}</div>
+                  <div style={{ fontSize: '0.9rem', color: 'var(--text-muted)' }}>{swap.shift?.location?.name}</div>
+                </div>
+                <div style={{ textAlign: 'right', fontSize: '0.8rem' }}>
+                  {new Date(swap.shift?.startTime).toLocaleDateString()}
+                  <br />
+                  {new Date(swap.shift?.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </div>
+              </div>
+              
+              <div style={{ fontSize: '0.85rem', marginBottom: 'var(--space-md)', padding: 'var(--space-sm)', background: 'hsla(0, 0%, 50%, 0.05)', borderRadius: 'var(--radius-sm)' }}>
+                {swap.type === 'SWAP' ? (
+                  <><strong>{swap.requester?.user?.name}</strong> wants to swap with <strong>{swap.accepter?.user?.name}</strong></>
+                ) : (
+                  <><strong>{swap.requester?.user?.name}</strong> wants to drop this shift</>
+                )}
+              </div>
+
+              {selectedSwap?.id === swap.id ? (
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-sm)' }}>
+                  <Input 
+                    placeholder="Add an admin comment (optional)..." 
+                    value={managerComment}
+                    onChange={(e) => setManagerComment(e.target.value)}
+                  />
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 'var(--space-sm)' }}>
+                    <Button variant="danger" onClick={() => handleApproveReject('REJECT')}>Reject</Button>
+                    <Button variant="success" onClick={() => handleApproveReject('APPROVE')}>Approve</Button>
+                  </div>
+                </div>
+              ) : (
+                <Button variant="secondary" style={{ width: '100%' }} onClick={() => setSelectedSwap(swap)}>Take Action</Button>
+              )}
+            </div>
+          )) : <p className="text-muted">No pending requests to review.</p>}
+        </div>
+      </Modal>
     </AppShell>
   );
 }

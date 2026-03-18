@@ -11,13 +11,6 @@ const getAuthHeaders = () => {
 const handleResponse = async (response) => {
   const data = await response.json();
   
-  // Log the response
-  console.log(`[API Response] ${response.status} ${response.url}`, {
-    status: response.status,
-    url: response.url,
-    data: data
-  });
-
   if (!response.ok) {
     throw {
       status: response.status,

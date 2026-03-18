@@ -4,7 +4,9 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { useAuth } from '@/hooks/useAuth';
+import { useSocket } from '@/hooks/useSocket';
 import Button from './Button';
+import Badge from './Badge';
 
 const Sidebar = ({ isOpen, onClose }) => {
   const pathname = usePathname();
@@ -97,7 +99,7 @@ const Sidebar = ({ isOpen, onClose }) => {
   );
 };
 
-const Topbar = ({ onMenuClick }) => {
+const Topbar = ({ onMenuClick, notificationCount }) => {
   return (
     <div style={{
       height: '70px',
@@ -121,17 +123,27 @@ const Topbar = ({ onMenuClick }) => {
       
       <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-lg)' }}>
         <div style={{ position: 'relative', cursor: 'pointer' }}>
-          <span style={{ fontSize: '1.2rem' }}>🔔</span>
-          <div style={{ 
-            position: 'absolute', 
-            top: '-2px', 
-            right: '-2px', 
-            width: '8px', 
-            height: '8px', 
-            background: 'var(--error)', 
-            borderRadius: '50%',
-            border: '2px solid var(--surface-color)'
-          }} />
+          <span style={{ fontSize: '1.5rem' }}>🔔</span>
+          {notificationCount > 0 && (
+            <div style={{ 
+              position: 'absolute', 
+              top: '-5px', 
+              right: '-5px', 
+              background: 'var(--error)', 
+              color: 'white',
+              borderRadius: '50%',
+              width: '18px',
+              height: '18px',
+              fontSize: '10px',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: '800',
+              border: '2px solid var(--surface-color)'
+            }}>
+              {notificationCount}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -140,6 +152,20 @@ const Topbar = ({ onMenuClick }) => {
 
 export default function AppShell({ children }) {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [notificationCount, setNotificationCount] = useState(0);
+  const socket = useSocket();
+
+  React.useEffect(() => {
+    if (socket) {
+      socket.on('notification', (data) => {
+        setNotificationCount(prev => prev + 1);
+      });
+
+      return () => {
+        socket.off('notification');
+      };
+    }
+  }, [socket]);
 
   return (
     <div style={{ display: 'flex', minHeight: '100vh', background: 'var(--bg-color)' }}>
@@ -151,7 +177,10 @@ export default function AppShell({ children }) {
         display: 'flex',
         flexDirection: 'column'
       }}>
-        <Topbar onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} />
+        <Topbar 
+          onMenuClick={() => setIsSidebarOpen(!isSidebarOpen)} 
+          notificationCount={notificationCount}
+        />
         <main style={{ padding: 'var(--space-xl)', flex: 1 }}>
           {children}
         </main>

@@ -33,8 +33,8 @@ const StaffCard = ({ staff, onEdit }) => {
           <div className="text-muted" style={{ fontSize: '0.875rem', marginTop: '2px' }}>{staff.email}</div>
           
           <div style={{ display: 'flex', gap: 'var(--space-xs)', flexWrap: 'wrap', marginTop: 'var(--space-md)' }}>
-            {staff.skills?.map(skill => (
-              <Badge key={skill} variant="primary" style={{ fontSize: '0.65rem' }}>{skill}</Badge>
+            {staff.skills?.map((skill, index) => (
+              <Badge key={`${skill}-${index}`} variant="primary" style={{ fontSize: '0.65rem' }}>{skill}</Badge>
             ))}
           </div>
         </div>
